@@ -90,6 +90,7 @@ namespace ImageFolderFixer.ViewModels
                 if (_progressCount == value) return;
                 _progressCount = value;
                 OnPropertyChanged(nameof(ProgressCount));
+                OnPropertyChanged(nameof(ProgressText));
             }
         }
 
@@ -102,7 +103,13 @@ namespace ImageFolderFixer.ViewModels
                 if (_progressMax == value) return;
                 _progressMax = value;
                 OnPropertyChanged(nameof(ProgressMax));
+                OnPropertyChanged(nameof(ProgressText));
             }
+        }
+
+        public string ProgressText
+        {
+            get { return $"{ProgressCount} / {ProgressMax}"; }
         }
 
         private readonly DelegateCommand _selectInputDirectoryCommand;
@@ -216,11 +223,11 @@ namespace ImageFolderFixer.ViewModels
             if (this.IsRunning)
                 return;
 
+            this.ProgressCount = 0;
+            this.ProgressMax = 1;
             this.IsRunning = true;
             try
             {
-                this.ProgressCount = 0;
-                this.ProgressMax = 0;
 
                 var parameters = new FixerLogicParameters(this.InputDirectory, this.OutputDirectory, this.RecurseInput, isPreview);
                 var logic = new FixerLogic();

@@ -20,9 +20,9 @@
             <RowDefinition Height="5pt" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="5pt" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="5pt" />
             <RowDefinition />
+            <RowDefinition Height="5pt" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid Grid.Row="0" Grid.IsSharedSizeScope="True">
             <Grid.Resources>
@@ -114,12 +114,7 @@
                     Command="{Binding RunCommand}"                    
                     />
         </Grid>
-        <Grid Grid.Row="4" Margin="5pt">
-            <ProgressBar Value="{Binding ProgressCount}" Minimum="0" Maximum="{Binding ProgressMax}" 
-                         Height="16"
-                         />
-        </Grid>
-        <Grid Grid.Row="6">
+        <Grid Grid.Row="4">
             <GroupBox Header="Log" Padding="5pt">
                 <Grid>
                     <TextBox IsReadOnly="True"
@@ -131,6 +126,14 @@
                              />
                 </Grid>
             </GroupBox>
+        </Grid>
+        <Grid Grid.Row="6" Margin="5pt" Visibility="{Binding IsRunning, Converter={conv:BooleanToVisibilityLayoutConverter}}">
+            <ProgressBar Value="{Binding ProgressCount}" Minimum="0" Maximum="{Binding ProgressMax}"      
+                         Height="20"
+                         />
+            <TextBlock Text="{Binding ProgressText, FallbackValue='0 / 0'}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       />
         </Grid>
     </Grid>
 </Window>

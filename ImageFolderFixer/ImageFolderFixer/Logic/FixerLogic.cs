@@ -8,7 +8,7 @@ using System.Globalization;
 namespace ImageFolderFixer.Logic
 {
     public class FixerLogic
-    {
+    {        
 
         public event EventHandler<EventArgs<string>> NotifyMessage;
         private void OnNotifyMessage(string message)
@@ -40,85 +40,32 @@ namespace ImageFolderFixer.Logic
             }
 
             var inputDirectory = new System.IO.DirectoryInfo(parameters.InputDirectory);
-            var outputDirectory = new System.IO.DirectoryInfo(parameters.OutputDirectory);
 
             var files = EnumerateFiles(parameters, inputDirectory);
 
             var imageFixInfos = files
                 .Select(GetImageFixInfo)
+                .OrderBy(o => o.DateTaken)
                 .ToList();
+            if (imageFixInfos.Count == 0)
+            {
+                OnNotifyMessage("No images to process.");
+                return false;
+            }
             OnNotifyMaxCount(imageFixInfos.Count);
 
             var imageFixInfosByYear = imageFixInfos
                 .GroupBy(o => o.Year);
 
+            var outputDirectory = new System.IO.DirectoryInfo(parameters.OutputDirectory);
+
             int totalCount = 0;
             foreach (var yearGroup in imageFixInfosByYear)
             {
-                var yearDirectory = System.IO.Path.Combine(outputDirectory.FullName, yearGroup.Key.ToString(CultureInfo.InvariantCulture));
-                if (!System.IO.Directory.Exists(yearDirectory))
-                {
-                    OnNotifyMessage($"Creating year directory {yearDirectory}.");
-                    if (!parameters.IsPreview)
-                    {
-                        System.IO.Directory.CreateDirectory(yearDirectory);
-                    }
-                }
-
-                int yearCount = 0;
-                var yearGroupByMonth = yearGroup.GroupBy(o => new { Month = o.Month, MonthName = o.MonthName });
-                foreach (var monthGroup in yearGroupByMonth)
-                {
-                    var dirName = $"{monthGroup.Key.Month.ToString("d2")} {monthGroup.Key.MonthName}";
-                    var monthDirectory = System.IO.Path.Combine(yearDirectory, dirName);
-                    if (!System.IO.Directory.Exists(monthDirectory))
-                    {
-                        OnNotifyMessage($"Creating month directory {monthDirectory}.");
-
-                        if (!parameters.IsPreview)
-                        {
-                            System.IO.Directory.CreateDirectory(monthDirectory);
-                        }
-                    }
-
-                    int monthCount = 0;
-                    foreach (var info in monthGroup)
-                    {
-                        var fileInfo = info.FileInfo;
-                        var destPath = System.IO.Path.Combine(monthDirectory, fileInfo.Name);
-
-                        if (parameters.IsPreview)
-                        {
-                            OnNotifyMessage($"Copying {fileInfo.FullName} to {destPath}");
-                        }
-
-                        monthCount++;
-                        if (!parameters.IsPreview)
-                        {
-                            fileInfo.CopyTo(destPath, true);
-                        }
-                        //else
-                        //{
-                        //    System.Threading.Thread.Sleep(15);
-                        //}
-                        OnNotifyProcessed();
-                    }
-                    if (!parameters.IsPreview)
-                    {
-                        OnNotifyMessage($"Copied {monthCount} files to {monthDirectory}.");
-                    }
-                    yearCount += monthCount;
-                }
-                if (!parameters.IsPreview)
-                {
-                    OnNotifyMessage($"Copied {yearCount} files to {yearDirectory}.");
-                }
-                totalCount += yearCount;
+                ExecuteYearGroup(parameters, outputDirectory, yearGroup, ref totalCount);
             }
-            if (!parameters.IsPreview)
-            {
-                OnNotifyMessage($"Copied {totalCount} total files.");
-            }
+
+            OnNotifyMessage($"Copied {totalCount} total files.");
 
             return true;
         }
@@ -171,6 +118,104 @@ namespace ImageFolderFixer.Logic
         private IEnumerable<System.IO.FileInfo> EnumerateFiles(FixerLogicParameters parameters, System.IO.DirectoryInfo inputDirectory)
         {
             return inputDirectory.EnumerateFiles("*.*", parameters.RecurseInput ? System.IO.SearchOption.AllDirectories : System.IO.SearchOption.TopDirectoryOnly);
+        }
+
+        private void ExecuteYearGroup(
+            FixerLogicParameters parameters,
+            System.IO.DirectoryInfo outputDirectory, 
+            IGrouping<int, ImageFixInfo> yearGroup, 
+            ref int totalCount
+            )
+        {
+            var yearDirectory = System.IO.Path.Combine(outputDirectory.FullName, yearGroup.Key.ToString(CultureInfo.InvariantCulture));
+            if (!System.IO.Directory.Exists(yearDirectory))
+            {
+                OnNotifyMessage($"Creating year directory {yearDirectory}.");
+                if (!parameters.IsPreview)
+                {
+                    System.IO.Directory.CreateDirectory(yearDirectory);
+                }
+            }
+
+            int yearCount = 0;
+            var yearGroupByMonth = yearGroup.GroupBy(o => new { Month = o.Month, MonthName = o.MonthName });
+            foreach (var monthGroup in yearGroupByMonth)
+            {
+                ExecuteMonthGroup(parameters, yearDirectory, monthGroup.Key.Month, monthGroup.Key.MonthName, monthGroup, ref yearCount);
+            }
+
+            OnNotifyMessage($"Copied {yearCount} files to {yearDirectory}.");
+            totalCount += yearCount;
+        }
+        private void ExecuteMonthGroup(
+            FixerLogicParameters parameters, 
+            string yearDirectory, 
+            int month, string monthName,
+            IEnumerable<ImageFixInfo> monthGroup,
+            ref int yearCount
+            )
+        {
+            var dirName = $"{month.ToString("d2")} {monthName}";
+            var monthDirectory = System.IO.Path.Combine(yearDirectory, dirName);
+            if (!System.IO.Directory.Exists(monthDirectory))
+            {
+                OnNotifyMessage($"Creating month directory {monthDirectory}.");
+
+                if (!parameters.IsPreview)
+                {
+                    System.IO.Directory.CreateDirectory(monthDirectory);
+                }
+            }
+
+            int monthCount = 0;
+            foreach (var info in monthGroup)
+            {
+                ExecuteInfo(parameters, info, monthDirectory, ref monthCount);
+            }
+
+            OnNotifyMessage($"Copied {monthCount} files to {monthDirectory}.");
+            yearCount += monthCount;
+        }
+        private void ExecuteInfo(
+            FixerLogicParameters parameters,
+            ImageFixInfo info,
+            string monthDirectory, 
+            ref int monthCount
+            )
+        {
+            var fileInfo = info.FileInfo;
+            var destPath = GetDestFilePath(fileInfo, monthDirectory);
+            if (parameters.IsPreview)
+            {
+                OnNotifyMessage($"Copying {fileInfo.FullName} to {destPath}");
+            }
+
+            monthCount++;
+            if (!parameters.IsPreview)
+            {
+                fileInfo.CopyTo(destPath, true);
+            }
+            //else
+            //{
+            //    System.Threading.Thread.Sleep(150);
+            //}
+            OnNotifyProcessed();
+        }
+        private string GetDestFilePath(System.IO.FileInfo fileInfo, string monthDirectory)
+        {
+            var fileName = fileInfo.Name;
+            var originalFileName = System.IO.Path.GetFileNameWithoutExtension(fileName);
+
+            int i = 2;
+            var destPath = System.IO.Path.Combine(monthDirectory, fileName);
+            while (System.IO.File.Exists(destPath))
+            {
+                fileName = $"{originalFileName}_{i}";
+                fileName = System.IO.Path.ChangeExtension(fileName, fileInfo.Extension);
+                destPath = System.IO.Path.Combine(monthDirectory, fileName);
+                i++;
+            }
+            return destPath;
         }
 
     }
